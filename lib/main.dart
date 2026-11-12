@@ -60,6 +60,7 @@ extension VehicleCategoryExtension on VehicleCategory {
 }
 
 enum PaymentMethod {
+  billetera,
   efectivo,
   spei,
   tarjeta,
@@ -68,8 +69,10 @@ enum PaymentMethod {
 extension PaymentMethodExtension on PaymentMethod {
   String get label {
     switch (this) {
+      case PaymentMethod.billetera:
+        return 'Billetera U-Parking (Saldo)';
       case PaymentMethod.efectivo:
-        return 'Efectivo en mano';
+        return 'Efectivo en cochera';
       case PaymentMethod.spei:
         return 'Transferencia SPEI / CoDi';
       case PaymentMethod.tarjeta:
@@ -79,6 +82,8 @@ extension PaymentMethodExtension on PaymentMethod {
 
   IconData get icon {
     switch (this) {
+      case PaymentMethod.billetera:
+        return Icons.account_balance_wallet;
       case PaymentMethod.efectivo:
         return Icons.payments_outlined;
       case PaymentMethod.spei:
@@ -97,6 +102,7 @@ class UserAccount {
   UserRole role;
   String defaultPlate;
   VehicleCategory defaultVehicle;
+  double walletBalance; // Saldo real en la app
 
   UserAccount({
     required this.id,
@@ -106,6 +112,7 @@ class UserAccount {
     required this.role,
     this.defaultPlate = 'UAP-102-B',
     this.defaultVehicle = VehicleCategory.sedan,
+    this.walletBalance = 150.0,
   });
 }
 
@@ -153,25 +160,25 @@ class HostProfile {
 
 class ParkingSpot {
   final String id;
-  final String title;
-  final String address;
-  final String zone;
-  final double basePricePerHour;
+  String title;
+  String address;
+  String zone;
+  double basePricePerHour;
   double rating;
-  final int totalBays;
+  int totalBays;
   int availableBays;
-  final List<VehicleCategory> allowedVehicles;
-  final String availableHoursLabel;
-  final List<PeakHourRange> peakHours;
-  final List<String> tags;
-  final List<String> images;
+  List<VehicleCategory> allowedVehicles;
+  String availableHoursLabel;
+  List<PeakHourRange> peakHours;
+  List<String> tags;
+  List<String> images;
   final HostProfile host;
   final double latitude;
   final double longitude;
-  final String howToGetThere;
-  final String heightLimit;
-  final String maxVehicleLength;
-  final String specificLimitations;
+  String howToGetThere;
+  String heightLimit;
+  String maxVehicleLength;
+  String specificLimitations;
   final List<Review> reviews;
 
   ParkingSpot({
@@ -360,24 +367,7 @@ final List<ParkingSpot> globalSpots = [
   ),
 ];
 
-final List<Reservation> globalReservations = [
-  Reservation(
-    id: 'RES-889102',
-    spot: globalSpots[0],
-    reservationDate: DateTime.now(),
-    startTime: const TimeOfDay(hour: 9, minute: 0),
-    endTime: const TimeOfDay(hour: 12, minute: 0),
-    durationHours: 3.0,
-    totalAmount: 66.0,
-    hasPeakSurge: false,
-    vehicleUsed: VehicleCategory.sedan,
-    driverName: 'Cristian Pulido',
-    driverPhone: '222-765-4321',
-    plateNumber: 'UAP-102-B',
-    paymentMethod: PaymentMethod.efectivo,
-    status: 'Confirmada',
-  ),
-];
+final List<Reservation> globalReservations = [];
 
 // ============================================================================
 // 3. MOCK FRAME MÓVIL (VISTA EN CELULAR)
@@ -449,7 +439,7 @@ class _DeviceSimulationShellState extends State<DeviceSimulationShell> {
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('11:00', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                        Text('13:58', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
                         Row(
                           children: [
                             Icon(Icons.wifi, color: Colors.white70, size: 13),
@@ -521,6 +511,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
       email: _loginEmailCtrl.text.trim(),
       phone: _selectedRole == UserRole.conductor ? '222-765-4321' : '222-211-9080',
       role: _selectedRole,
+      walletBalance: _selectedRole == UserRole.conductor ? 150.0 : 580.0,
     );
     widget.onAuthSuccess();
   }
@@ -539,6 +530,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
       email: _regEmailCtrl.text.trim(),
       phone: _regPhoneCtrl.text.trim().isEmpty ? '222-000-0000' : _regPhoneCtrl.text.trim(),
       role: _selectedRole,
+      walletBalance: _selectedRole == UserRole.conductor ? 100.0 : 0.0,
     );
     widget.onAuthSuccess();
   }
@@ -577,7 +569,6 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
       body: TabBarView(
         controller: _tabController,
         children: [
-          // TAB 1: LOGIN
           SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
             child: Column(
@@ -619,8 +610,6 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
               ],
             ),
           ),
-
-          // TAB 2: REGISTRO
           SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
             child: Column(
@@ -726,7 +715,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
 }
 
 // ============================================================================
-// 5. SHELL DEL CONDUCTOR (BUSCAR, CITAS Y PERFIL)
+// 5. SHELLS POR ROL
 // ============================================================================
 
 class DriverMainShell extends StatefulWidget {
@@ -775,10 +764,6 @@ class _DriverMainShellState extends State<DriverMainShell> {
   }
 }
 
-// ============================================================================
-// 6. SHELL DEL ANFITRIÓN (DASHBOARD, PUBLICAR, GESTIÓN DE RESERVAS Y PERFIL)
-// ============================================================================
-
 class HostMainShell extends StatefulWidget {
   final VoidCallback onLogout;
   const HostMainShell({super.key, required this.onLogout});
@@ -794,7 +779,7 @@ class _HostMainShellState extends State<HostMainShell> {
   Widget build(BuildContext context) {
     final List<Widget> pages = [
       HostDashboardPage(onNavigateToPublish: () => setState(() => _idx = 1)),
-      PublishSpotPage(onSpotCreated: () => setState(() => _idx = 0)),
+      SpotFormPage(onSaved: () => setState(() => _idx = 0)),
       const HostReservationsManagerPage(),
       UserProfilePage(onLogout: widget.onLogout),
     ];
@@ -832,7 +817,7 @@ class _HostMainShellState extends State<HostMainShell> {
 }
 
 // ============================================================================
-// 7. VISTA CONDUCTOR: EXPLORAR COCHERAS
+// 6. VISTA CONDUCTOR: EXPLORAR COCHERAS
 // ============================================================================
 
 class DriverExplorePage extends StatefulWidget {
@@ -863,10 +848,27 @@ class _DriverExplorePageState extends State<DriverExplorePage> {
             Text('Buscar Estacionamiento', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(12)),
+                child: Row(
+                  children: [
+                    const Icon(Icons.account_balance_wallet, size: 14, color: Colors.amber),
+                    const SizedBox(width: 4),
+                    Text('\$${currentUser?.walletBalance.toStringAsFixed(0) ?? "0"}', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [
-          // Selector de Zona
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             color: Colors.blue.shade50.withOpacity(0.4),
@@ -888,8 +890,6 @@ class _DriverExplorePageState extends State<DriverExplorePage> {
               ),
             ),
           ),
-
-          // Filtro por Vehículo
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             color: Colors.grey.shade100,
@@ -922,7 +922,6 @@ class _DriverExplorePageState extends State<DriverExplorePage> {
               ),
             ),
           ),
-
           Expanded(
             child: filteredSpots.isEmpty
                 ? const Center(child: Text('No hay estacionamientos con este criterio.'))
@@ -962,10 +961,11 @@ class _DriverExplorePageState extends State<DriverExplorePage> {
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                   child: Image.network(
-                    spot.images.first,
+                    spot.images.isNotEmpty ? spot.images.first : 'https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=700',
                     height: 145,
                     width: double.infinity,
                     fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(height: 145, color: Colors.grey[200], child: const Icon(Icons.garage, size: 48, color: Colors.grey)),
                   ),
                 ),
                 Positioned(
@@ -1017,8 +1017,6 @@ class _DriverExplorePageState extends State<DriverExplorePage> {
                   const SizedBox(height: 3),
                   Text(spot.address, style: TextStyle(color: Colors.grey.shade700, fontSize: 11.5)),
                   const SizedBox(height: 6),
-
-                  // Anfitrión
                   Row(
                     children: [
                       CircleAvatar(radius: 9, backgroundImage: NetworkImage(spot.host.avatarUrl)),
@@ -1026,7 +1024,6 @@ class _DriverExplorePageState extends State<DriverExplorePage> {
                       Text('Anfitrión: ${spot.host.name}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
                     ],
                   ),
-
                   if (spot.peakHours.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Container(
@@ -1042,11 +1039,9 @@ class _DriverExplorePageState extends State<DriverExplorePage> {
                       ),
                     ),
                   ],
-
                   const SizedBox(height: 8),
                   const Divider(height: 1),
                   const SizedBox(height: 8),
-
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -1075,7 +1070,7 @@ class _DriverExplorePageState extends State<DriverExplorePage> {
 }
 
 // ============================================================================
-// 8. DETALLE Y APARTADO PARA CONDUCTORES (CON RESEÑAS, MAPA Y ANFITRIÓN)
+// 7. DETALLE Y APARTADO (CON MÉTODOS DE PAGO Y BILLETERA RESTAURADOS)
 // ============================================================================
 
 class SpotDetailPage extends StatefulWidget {
@@ -1091,19 +1086,20 @@ class _SpotDetailPageState extends State<SpotDetailPage> {
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 12, minute: 0);
-  PaymentMethod _selectedPayment = PaymentMethod.efectivo;
+  PaymentMethod _selectedPayment = PaymentMethod.billetera;
   int _photoIndex = 0;
 
   final _plateCtrl = TextEditingController(text: currentUser?.defaultPlate ?? 'UAP-102-B');
   final _driverPhoneCtrl = TextEditingController(text: currentUser?.phone ?? '222-765-4321');
-
   final _reviewCommentCtrl = TextEditingController();
   double _reviewScore = 5.0;
 
   @override
   void initState() {
     super.initState();
-    _selectedVehicle = widget.spot.allowedVehicles.first;
+    _selectedVehicle = widget.spot.allowedVehicles.isNotEmpty
+        ? widget.spot.allowedVehicles.first
+        : VehicleCategory.sedan;
   }
 
   bool _isPeak(TimeOfDay start, TimeOfDay end) {
@@ -1235,6 +1231,20 @@ class _SpotDetailPageState extends State<SpotDetailPage> {
     final isPeakHour = _isPeak(_startTime, _endTime);
     final totalAmount = _total(duration, isPeakHour);
 
+    // Validación de saldo si elige Billetera U-Parking
+    if (_selectedPayment == PaymentMethod.billetera) {
+      if ((currentUser?.walletBalance ?? 0) < totalAmount) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Saldo insuficiente en Billetera U-Parking. Recarga en tu Perfil o selecciona otro método.'),
+            backgroundColor: Colors.deepOrange,
+          ),
+        );
+        return;
+      }
+      currentUser!.walletBalance -= totalAmount;
+    }
+
     final res = Reservation(
       id: 'RES-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
       spot: widget.spot,
@@ -1266,10 +1276,12 @@ class _SpotDetailPageState extends State<SpotDetailPage> {
           children: [
             Text('Código: ${res.id}', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF003B5C))),
             Text('Anfitrión: ${widget.spot.host.name} (${widget.spot.host.phone})'),
+            Text('Vehículo: ${_selectedVehicle.label} (${_plateCtrl.text})'),
             Text('Fecha: ${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}'),
             Text('Horario: ${_startTime.format(context)} a ${_endTime.format(context)}'),
+            Text('Método de pago: ${_selectedPayment.label}', style: const TextStyle(fontWeight: FontWeight.w600)),
             const Divider(),
-            Text('Total: \$${totalAmount.toStringAsFixed(2)} MXN', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            Text('Total cobrado: \$${totalAmount.toStringAsFixed(2)} MXN', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           ],
         ),
         actions: [
@@ -1307,7 +1319,11 @@ class _SpotDetailPageState extends State<SpotDetailPage> {
                   child: PageView.builder(
                     itemCount: widget.spot.images.length,
                     onPageChanged: (i) => setState(() => _photoIndex = i),
-                    itemBuilder: (context, i) => Image.network(widget.spot.images[i], fit: BoxFit.cover),
+                    itemBuilder: (context, i) => Image.network(
+                      widget.spot.images[i],
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(color: Colors.grey[200], child: const Icon(Icons.garage, size: 50)),
+                    ),
                   ),
                 ),
                 Positioned(
@@ -1428,8 +1444,39 @@ class _SpotDetailPageState extends State<SpotDetailPage> {
 
                   const SizedBox(height: 14),
 
+                  // Selección de vehículo y placas
+                  const Text('1. Vehículo a Estacionar:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    children: widget.spot.allowedVehicles.map((v) {
+                      final sel = _selectedVehicle == v;
+                      return ChoiceChip(
+                        avatar: Icon(v.icon, size: 15, color: sel ? Colors.white : Colors.black87),
+                        label: Text(v.label, style: const TextStyle(fontSize: 11)),
+                        selected: sel,
+                        selectedColor: const Color(0xFF003B5C),
+                        labelStyle: TextStyle(color: sel ? Colors.white : Colors.black87),
+                        onSelected: (val) {
+                          if (val) setState(() => _selectedVehicle = v);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _plateCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Placas o referencia del vehículo',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
                   // Fecha y Horario
-                  const Text('Horario de tu Cita:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                  const Text('2. Fecha y Horario de tu Cita:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 6),
                   OutlinedButton.icon(
                     onPressed: _pickDate,
@@ -1461,6 +1508,28 @@ class _SpotDetailPageState extends State<SpotDetailPage> {
                     const SizedBox(height: 6),
                     const Text('⚡ Recargo de hora pico incluido en el total.', style: TextStyle(color: Colors.deepOrange, fontSize: 11.5, fontWeight: FontWeight.bold)),
                   ],
+
+                  const SizedBox(height: 14),
+
+                  // 3. MÉTODOS DE PAGO RESTAURADOS AL ESCOGER CAJÓN
+                  const Text('3. Método de Pago:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  ...PaymentMethod.values.map((m) {
+                    return RadioListTile<PaymentMethod>(
+                      value: m,
+                      groupValue: _selectedPayment,
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      secondary: Icon(m.icon, size: 18, color: const Color(0xFF003B5C)),
+                      title: Text(m.label, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                      subtitle: m == PaymentMethod.billetera
+                          ? Text('Saldo actual: \$${currentUser?.walletBalance.toStringAsFixed(2) ?? "0.00"} MXN', style: const TextStyle(fontSize: 11, color: Colors.teal))
+                          : null,
+                      onChanged: (val) {
+                        if (val != null) setState(() => _selectedPayment = val);
+                      },
+                    );
+                  }),
 
                   const Divider(height: 24),
 
@@ -1529,7 +1598,7 @@ class _SpotDetailPageState extends State<SpotDetailPage> {
 }
 
 // ============================================================================
-// 9. VISTA CONDUCTOR: MIS CITAS (CON CANCELACIÓN)
+// 8. VISTA CONDUCTOR: MIS CITAS (CON REEMBOLSO A BILLETERA AL CANCELAR)
 // ============================================================================
 
 class DriverReservationsPage extends StatefulWidget {
@@ -1545,7 +1614,10 @@ class _DriverReservationsPageState extends State<DriverReservationsPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('¿Cancelar Cita?'),
-        content: Text('Se liberará el cajón en "${r.spot.title}". ¿Deseas continuar?'),
+        content: Text(
+          'Se liberará el cajón en "${r.spot.title}".\n'
+          '${r.paymentMethod == PaymentMethod.billetera ? "El monto de \$${r.totalAmount.toStringAsFixed(2)} MXN se reembolsará a tu Billetera U-Parking." : ""}',
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Volver')),
           ElevatedButton(
@@ -1554,6 +1626,9 @@ class _DriverReservationsPageState extends State<DriverReservationsPage> {
               setState(() {
                 r.status = 'Cancelada';
                 r.spot.availableBays++;
+                if (r.paymentMethod == PaymentMethod.billetera && currentUser != null) {
+                  currentUser!.walletBalance += r.totalAmount;
+                }
               });
               Navigator.pop(ctx);
             },
@@ -1597,6 +1672,7 @@ class _DriverReservationsPageState extends State<DriverReservationsPage> {
                         Text(r.spot.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                         Text('Anfitrión: ${r.spot.host.name} (${r.spot.host.phone})', style: const TextStyle(fontSize: 11.5, color: Colors.blueGrey)),
                         Text('Fecha: ${r.reservationDate.day}/${r.reservationDate.month}/${r.reservationDate.year} • ${r.startTime.format(context)} a ${r.endTime.format(context)}', style: const TextStyle(fontSize: 11.5)),
+                        Text('Método de pago: ${r.paymentMethod.label}', style: const TextStyle(fontSize: 11, color: Colors.black87)),
                         const Divider(height: 14),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1621,7 +1697,7 @@ class _DriverReservationsPageState extends State<DriverReservationsPage> {
 }
 
 // ============================================================================
-// 10. VISTA ANFITRIÓN: PANEL DE CONTROL (DASHBOARD EN TIEMPO REAL)
+// 9. VISTA ANFITRIÓN: PANEL DE CONTROL (CON EDITAR Y ELIMINAR PUBLICACIÓN)
 // ============================================================================
 
 class HostDashboardPage extends StatefulWidget {
@@ -1633,9 +1709,49 @@ class HostDashboardPage extends StatefulWidget {
 }
 
 class _HostDashboardPageState extends State<HostDashboardPage> {
+  void _deleteSpot(ParkingSpot spot) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Eliminar Estacionamiento?'),
+        content: Text('¿Estás seguro de eliminar "${spot.title}" de la plataforma?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              setState(() {
+                globalSpots.remove(spot);
+              });
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Publicación eliminada.')),
+              );
+            },
+            child: const Text('Eliminar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _editSpot(ParkingSpot spot) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SpotFormPage(
+          spotToEdit: spot,
+          onSaved: () {
+            Navigator.pop(context);
+            setState(() {});
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Calculamos métricas en vivo
     int totalSpots = globalSpots.length;
     int totalBaysCount = globalSpots.fold(0, (sum, s) => sum + s.totalBays);
     int freeBaysCount = globalSpots.fold(0, (sum, s) => sum + s.availableBays);
@@ -1650,7 +1766,7 @@ class _HostDashboardPageState extends State<HostDashboardPage> {
           children: [
             Icon(Icons.dashboard, size: 22),
             SizedBox(width: 8),
-            Text('Panel de Autogestión Anfitrión', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text('Panel de Control Anfitrión', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
       ),
@@ -1659,45 +1775,35 @@ class _HostDashboardPageState extends State<HostDashboardPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Bienvenido, ${currentUser?.name}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-            const Text('Supervisa tus cocheras, ingresos y cajones en Puebla.', style: TextStyle(fontSize: 12, color: Colors.grey)),
-            const SizedBox(height: 14),
+            Text('Hola, ${currentUser?.name}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            const Text('Administra, edita o elimina tus cocheras publicadas.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 12),
 
-            // Tarjetas de Métricas de Negocio
             Row(
               children: [
-                Expanded(
-                  child: _buildMetricCard('Ingresos Estimados', '\$${totalRevenue.toStringAsFixed(2)}', Icons.monetization_on, Colors.teal),
-                ),
+                Expanded(child: _buildMetricCard('Ingresos por Citas', '\$${totalRevenue.toStringAsFixed(2)}', Icons.monetization_on, Colors.teal)),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: _buildMetricCard('Cajones Ocupados', '$occupiedBaysCount de $totalBaysCount', Icons.directions_car, Colors.deepOrange),
-                ),
+                Expanded(child: _buildMetricCard('Cajones Ocupados', '$occupiedBaysCount de $totalBaysCount', Icons.directions_car, Colors.deepOrange)),
               ],
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(
-                  child: _buildMetricCard('Cajones Libres', '$freeBaysCount libres', Icons.check_circle_outline, Colors.blue),
-                ),
+                Expanded(child: _buildMetricCard('Cajones Libres', '$freeBaysCount libres', Icons.check_circle_outline, Colors.blue)),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: _buildMetricCard('Cocheras Activas', '$totalSpots registradas', Icons.home_work, const Color(0xFF003B5C)),
-                ),
+                Expanded(child: _buildMetricCard('Cocheras Activas', '$totalSpots lugares', Icons.home_work, const Color(0xFF003B5C))),
               ],
             ),
 
             const SizedBox(height: 18),
 
-            // Control de Cajones en Tiempo Real por Cochera
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Control de Cajones en Vivo:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                const Text('Mis Cocheras Publicadas:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                 TextButton.icon(
                   icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Nueva Cochera'),
+                  label: const Text('Publicar Nueva'),
                   onPressed: widget.onNavigateToPublish,
                 ),
               ],
@@ -1706,7 +1812,7 @@ class _HostDashboardPageState extends State<HostDashboardPage> {
 
             ...globalSpots.map((spot) {
               return Card(
-                margin: const EdgeInsets.only(bottom: 8),
+                margin: const EdgeInsets.only(bottom: 10),
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Column(
@@ -1716,31 +1822,49 @@ class _HostDashboardPageState extends State<HostDashboardPage> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Expanded(
-                            child: Text(spot.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                            child: Text(spot.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                           ),
-                          Text('\$${spot.basePricePerHour} MXN/h', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
+                          Row(
+                            children: [
+                              IconButton(
+                                tooltip: 'Editar publicación',
+                                icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.blue),
+                                onPressed: () => _editSpot(spot),
+                              ),
+                              IconButton(
+                                tooltip: 'Eliminar publicación',
+                                icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                onPressed: () => _deleteSpot(spot),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                       Text(spot.address, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 4,
+                        children: spot.allowedVehicles.map((v) => Chip(
+                              label: Text(v.label, style: const TextStyle(fontSize: 9.5)),
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                            )).toList(),
+                      ),
+                      const Divider(height: 14),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Disponibilidad: ${spot.availableBays} / ${spot.totalBays} cajones', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                          Text('Libres: ${spot.availableBays} / ${spot.totalBays}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                           Row(
                             children: [
                               IconButton.filledTonal(
-                                icon: const Icon(Icons.remove, size: 16),
-                                onPressed: spot.availableBays > 0
-                                    ? () => setState(() => spot.availableBays--)
-                                    : null,
+                                icon: const Icon(Icons.remove, size: 15),
+                                onPressed: spot.availableBays > 0 ? () => setState(() => spot.availableBays--) : null,
                               ),
                               const SizedBox(width: 4),
                               IconButton.filledTonal(
-                                icon: const Icon(Icons.add, size: 16),
-                                onPressed: spot.availableBays < spot.totalBays
-                                    ? () => setState(() => spot.availableBays++)
-                                    : null,
+                                icon: const Icon(Icons.add, size: 15),
+                                onPressed: spot.availableBays < spot.totalBays ? () => setState(() => spot.availableBays++) : null,
                               ),
                             ],
                           ),
@@ -1759,7 +1883,7 @@ class _HostDashboardPageState extends State<HostDashboardPage> {
 
   Widget _buildMetricCard(String label, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(12),
@@ -1768,9 +1892,9 @@ class _HostDashboardPageState extends State<HostDashboardPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(height: 6),
-          Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 4),
+          Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color)),
           Text(label, style: const TextStyle(fontSize: 10.5, color: Colors.black87)),
         ],
       ),
@@ -1779,7 +1903,319 @@ class _HostDashboardPageState extends State<HostDashboardPage> {
 }
 
 // ============================================================================
-// 11. VISTA ANFITRIÓN: GESTIÓN DE RESERVAS DE CLIENTES
+// 10. FORMULARIO UNIFICADO DE PUBLICAR Y EDITAR COCHERA (Con Vehículos y Fotos)
+// ============================================================================
+
+class SpotFormPage extends StatefulWidget {
+  final ParkingSpot? spotToEdit;
+  final VoidCallback onSaved;
+
+  const SpotFormPage({super.key, this.spotToEdit, required this.onSaved});
+
+  @override
+  State<SpotFormPage> createState() => _SpotFormPageState();
+}
+
+class _SpotFormPageState extends State<SpotFormPage> {
+  final _formKey = GlobalKey<FormState>();
+
+  late TextEditingController _titleCtrl;
+  late TextEditingController _addressCtrl;
+  late TextEditingController _priceCtrl;
+  late TextEditingController _baysCtrl;
+  late TextEditingController _heightCtrl;
+  late TextEditingController _lengthCtrl;
+  late TextEditingController _rulesCtrl;
+  late TextEditingController _hoursCtrl;
+  final _photoUrlCtrl = TextEditingController();
+
+  String _zone = 'Centro Histórico';
+  List<VehicleCategory> _allowedVehicles = [];
+  List<String> _spotImages = [];
+
+  @override
+  void initState() {
+    super.initState();
+    final s = widget.spotToEdit;
+    _titleCtrl = TextEditingController(text: s?.title ?? '');
+    _addressCtrl = TextEditingController(text: s?.address ?? '');
+    _priceCtrl = TextEditingController(text: s?.basePricePerHour.toString() ?? '');
+    _baysCtrl = TextEditingController(text: s?.totalBays.toString() ?? '3');
+    _heightCtrl = TextEditingController(text: s?.heightLimit ?? '2.20 m');
+    _lengthCtrl = TextEditingController(text: s?.maxVehicleLength ?? '4.80 m');
+    _rulesCtrl = TextEditingController(text: s?.specificLimitations ?? 'No fugas de aceite. Dejar llave si pernocta.');
+    _hoursCtrl = TextEditingController(text: s?.availableHoursLabel ?? '07:00 - 21:00');
+
+    _zone = s?.zone ?? 'Centro Histórico';
+    _allowedVehicles = s != null ? List.from(s.allowedVehicles) : [VehicleCategory.sedan, VehicleCategory.camioneta];
+    _spotImages = s != null
+        ? List.from(s.images)
+        : ['https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=700'];
+  }
+
+  void _addPhotoUrl() {
+    final url = _photoUrlCtrl.text.trim();
+    if (url.isNotEmpty) {
+      setState(() {
+        _spotImages.add(url);
+        _photoUrlCtrl.clear();
+      });
+    }
+  }
+
+  void _submit() {
+    if (_formKey.currentState!.validate()) {
+      if (_allowedVehicles.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Selecciona al menos un tipo de vehículo permitido.')),
+        );
+        return;
+      }
+
+      if (widget.spotToEdit != null) {
+        // Actualizar cochera existente
+        final s = widget.spotToEdit!;
+        s.title = _titleCtrl.text.trim();
+        s.address = _addressCtrl.text.trim();
+        s.zone = _zone;
+        s.basePricePerHour = double.parse(_priceCtrl.text.trim());
+        s.totalBays = int.parse(_baysCtrl.text.trim());
+        if (s.availableBays > s.totalBays) s.availableBays = s.totalBays;
+        s.availableHoursLabel = _hoursCtrl.text.trim();
+        s.allowedVehicles = List.from(_allowedVehicles);
+        s.images = List.from(_spotImages);
+        s.heightLimit = _heightCtrl.text.trim();
+        s.maxVehicleLength = _lengthCtrl.text.trim();
+        s.specificLimitations = _rulesCtrl.text.trim();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('¡Cambios guardados en la publicación!'), backgroundColor: Colors.teal),
+        );
+      } else {
+        // Crear nueva cochera
+        final newSpot = ParkingSpot(
+          id: 'up-${DateTime.now().millisecondsSinceEpoch}',
+          title: _titleCtrl.text.trim(),
+          address: _addressCtrl.text.trim(),
+          zone: _zone,
+          basePricePerHour: double.parse(_priceCtrl.text.trim()),
+          rating: 5.0,
+          totalBays: int.parse(_baysCtrl.text.trim()),
+          availableBays: int.parse(_baysCtrl.text.trim()),
+          allowedVehicles: List.from(_allowedVehicles),
+          availableHoursLabel: _hoursCtrl.text.trim(),
+          peakHours: [PeakHourRange(startDecimal: 13.0, endDecimal: 15.5, label: '13:00 - 15:30 (Pico Comercial)')],
+          tags: ['Espacio Privado', 'Nuevo'],
+          images: _spotImages.isEmpty
+              ? ['https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=700']
+              : List.from(_spotImages),
+          host: HostProfile(
+            id: currentUser?.id ?? 'host-new',
+            name: currentUser?.name ?? 'Anfitrión',
+            phone: currentUser?.phone ?? '222-123-4567',
+            rating: 5.0,
+            avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120',
+          ),
+          latitude: 19.0435,
+          longitude: -98.2000,
+          howToGetThere: 'Tocar el timbre al llegar al portón.',
+          heightLimit: _heightCtrl.text.trim(),
+          maxVehicleLength: _lengthCtrl.text.trim(),
+          specificLimitations: _rulesCtrl.text.trim(),
+          reviews: [],
+        );
+        globalSpots.insert(0, newSpot);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('¡Cochera publicada con éxito!'), backgroundColor: Colors.teal),
+        );
+      }
+
+      widget.onSaved();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEditing = widget.spotToEdit != null;
+
+    return Scaffold(
+      appBar: AppBar(title: Text(isEditing ? 'Editar Estacionamiento' : 'Publicar Estacionamiento')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(14),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('1. Datos Generales', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: _zone,
+                decoration: const InputDecoration(labelText: 'Zona en Puebla', border: OutlineInputBorder(), isDense: true),
+                items: const [
+                  DropdownMenuItem(value: 'Centro Histórico', child: Text('Centro Histórico')),
+                  DropdownMenuItem(value: 'Ciudad Universitaria (CU)', child: Text('Ciudad Universitaria (CU)')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() => _zone = val);
+                },
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _titleCtrl,
+                decoration: const InputDecoration(labelText: 'Título del espacio', border: OutlineInputBorder(), isDense: true),
+                validator: (v) => v!.isEmpty ? 'Requerido' : null,
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _addressCtrl,
+                decoration: const InputDecoration(labelText: 'Dirección completa', border: OutlineInputBorder(), isDense: true),
+                validator: (v) => v!.isEmpty ? 'Requerido' : null,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _priceCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Tarifa (\$ MXN/h)', border: OutlineInputBorder(), isDense: true),
+                      validator: (v) => v!.isEmpty ? 'Requerido' : null,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _baysCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Cajones totales', border: OutlineInputBorder(), isDense: true),
+                      validator: (v) => v!.isEmpty ? 'Requerido' : null,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _hoursCtrl,
+                decoration: const InputDecoration(labelText: 'Horario disponible (ej. 07:00 - 21:00)', border: OutlineInputBorder(), isDense: true),
+              ),
+
+              const SizedBox(height: 16),
+
+              // 2. TIPOS DE VEHÍCULOS ACEPTADOS (RESTAURADO)
+              const Text('2. Tipos de Vehículos Aceptados:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                children: VehicleCategory.values.map((cat) {
+                  final checked = _allowedVehicles.contains(cat);
+                  return FilterChip(
+                    avatar: Icon(cat.icon, size: 15),
+                    label: Text(cat.label, style: const TextStyle(fontSize: 11)),
+                    selected: checked,
+                    onSelected: (selected) {
+                      setState(() {
+                        if (selected) {
+                          _allowedVehicles.add(cat);
+                        } else {
+                          _allowedVehicles.remove(cat);
+                        }
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+
+              const SizedBox(height: 16),
+
+              // 3. FOTOS DEL LUGAR (RESTAURADO)
+              const Text('3. Galería de Fotos del Lugar:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _photoUrlCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Pegar enlace URL de imagen',
+                        hintText: 'https://...',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  ElevatedButton(
+                    onPressed: _addPhotoUrl,
+                    child: const Text('Añadir'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 75,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _spotImages.length,
+                  itemBuilder: (context, index) {
+                    return Stack(
+                      children: [
+                        Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          width: 90,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            image: DecorationImage(image: NetworkImage(_spotImages[index]), fit: BoxFit.cover),
+                          ),
+                        ),
+                        Positioned(
+                          top: 2,
+                          right: 10,
+                          child: InkWell(
+                            onTap: () => setState(() => _spotImages.removeAt(index)),
+                            child: const CircleAvatar(radius: 10, backgroundColor: Colors.red, child: Icon(Icons.close, size: 12, color: Colors.white)),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // 4. LIMITACIONES FÍSICAS
+              const Text('4. Limitaciones y Medidas:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(child: TextFormField(controller: _heightCtrl, decoration: const InputDecoration(labelText: 'Altura máx', border: OutlineInputBorder(), isDense: true))),
+                  const SizedBox(width: 8),
+                  Expanded(child: TextFormField(controller: _lengthCtrl, decoration: const InputDecoration(labelText: 'Largo máx', border: OutlineInputBorder(), isDense: true))),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextFormField(controller: _rulesCtrl, decoration: const InputDecoration(labelText: 'Restricciones particulares', border: OutlineInputBorder(), isDense: true)),
+
+              const SizedBox(height: 18),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(46),
+                  backgroundColor: const Color(0xFF003B5C),
+                ),
+                onPressed: _submit,
+                child: Text(isEditing ? 'Guardar Cambios' : 'Publicar Cochera', style: const TextStyle(color: Colors.white, fontSize: 15)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// 11. GESTIÓN DE RESERVAS (ANFITRIÓN)
 // ============================================================================
 
 class HostReservationsManagerPage extends StatelessWidget {
@@ -1816,34 +2252,9 @@ class HostReservationsManagerPage extends StatelessWidget {
                           ],
                         ),
                         Text('Cochera: ${r.spot.title}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Icon(Icons.person, size: 15, color: Color(0xFF003B5C)),
-                                  const SizedBox(width: 4),
-                                  Text('Cliente: ${r.driverName} (${r.driverPhone})', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              Row(
-                                children: [
-                                  const Icon(Icons.directions_car, size: 15, color: Colors.teal),
-                                  const SizedBox(width: 4),
-                                  Text('Vehículo: ${r.vehicleUsed.label} • Placas: ${r.plateNumber}', style: const TextStyle(fontSize: 11.5)),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text('Fecha: ${r.reservationDate.day}/${r.reservationDate.month}/${r.reservationDate.year} • Horario: ${r.startTime.format(context)} a ${r.endTime.format(context)}', style: const TextStyle(fontSize: 11.5)),
-                        Text('Cobro: \$${r.totalAmount.toStringAsFixed(2)} MXN • Método: ${r.paymentMethod.label}', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF003B5C))),
+                        Text('Cliente: ${r.driverName} • Placas: ${r.plateNumber}', style: const TextStyle(fontSize: 12)),
+                        Text('Fecha: ${r.reservationDate.day}/${r.reservationDate.month}/${r.reservationDate.year} • ${r.startTime.format(context)} a ${r.endTime.format(context)}', style: const TextStyle(fontSize: 11.5)),
+                        Text('Total: \$${r.totalAmount.toStringAsFixed(2)} MXN • Pago: ${r.paymentMethod.label}', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF003B5C))),
                       ],
                     ),
                   ),
@@ -1855,173 +2266,111 @@ class HostReservationsManagerPage extends StatelessWidget {
 }
 
 // ============================================================================
-// 12. VISTA ANFITRIÓN: PUBLICAR NUEVA COCHERA
+// 12. PERFIL DE USUARIO (CON EDITAR PERFIL Y RECARGA DE BILLETERA)
 // ============================================================================
 
-class PublishSpotPage extends StatefulWidget {
-  final VoidCallback onSpotCreated;
-  const PublishSpotPage({super.key, required this.onSpotCreated});
+class UserProfilePage extends StatefulWidget {
+  final VoidCallback onLogout;
+  const UserProfilePage({super.key, required this.onLogout});
 
   @override
-  State<PublishSpotPage> createState() => _PublishSpotPageState();
+  State<UserProfilePage> createState() => _UserProfilePageState();
 }
 
-class _PublishSpotPageState extends State<PublishSpotPage> {
-  final _formKey = GlobalKey<FormState>();
-  final _titleCtrl = TextEditingController();
-  final _addressCtrl = TextEditingController();
-  final _priceCtrl = TextEditingController();
-  final _baysCtrl = TextEditingController(text: '3');
-  final _heightCtrl = TextEditingController(text: '2.20 m');
-  final _lengthCtrl = TextEditingController(text: '4.80 m');
-  final _rulesCtrl = TextEditingController(text: 'No fugas de aceite. Dejar llave si pernocta.');
+class _UserProfilePageState extends State<UserProfilePage> {
+  void _openEditProfileDialog() {
+    final nameCtrl = TextEditingController(text: currentUser?.name ?? '');
+    final phoneCtrl = TextEditingController(text: currentUser?.phone ?? '');
+    final plateCtrl = TextEditingController(text: currentUser?.defaultPlate ?? '');
 
-  String _zone = 'Centro Histórico';
-  final List<VehicleCategory> _allowed = [VehicleCategory.sedan, VehicleCategory.camioneta];
-
-  void _submit() {
-    if (_formKey.currentState!.validate()) {
-      final newSpot = ParkingSpot(
-        id: 'up-${DateTime.now().millisecondsSinceEpoch}',
-        title: _titleCtrl.text.trim(),
-        address: _addressCtrl.text.trim(),
-        zone: _zone,
-        basePricePerHour: double.parse(_priceCtrl.text.trim()),
-        rating: 5.0,
-        totalBays: int.parse(_baysCtrl.text.trim()),
-        availableBays: int.parse(_baysCtrl.text.trim()),
-        allowedVehicles: List.from(_allowed),
-        availableHoursLabel: '07:00 - 21:00',
-        peakHours: [PeakHourRange(startDecimal: 13.0, endDecimal: 15.5, label: '13:00 - 15:30 (Pico Comercial)')],
-        tags: ['Espacio Privado', 'Nuevo'],
-        images: ['https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=700'],
-        host: HostProfile(
-          id: currentUser?.id ?? 'host-new',
-          name: currentUser?.name ?? 'Anfitrión',
-          phone: currentUser?.phone ?? '222-123-4567',
-          rating: 5.0,
-          avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120',
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Editar Perfil'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Nombre completo', isDense: true)),
+            const SizedBox(height: 10),
+            TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'Teléfono / WhatsApp', isDense: true)),
+            if (currentUser?.role == UserRole.conductor) ...[
+              const SizedBox(height: 10),
+              TextField(controller: plateCtrl, decoration: const InputDecoration(labelText: 'Placas predeterminadas', isDense: true)),
+            ],
+          ],
         ),
-        latitude: 19.0435,
-        longitude: -98.2000,
-        howToGetThere: 'Tocar el timbre al llegar al portón.',
-        heightLimit: _heightCtrl.text.trim(),
-        maxVehicleLength: _lengthCtrl.text.trim(),
-        specificLimitations: _rulesCtrl.text.trim(),
-        reviews: [],
-      );
-
-      globalSpots.insert(0, newSpot);
-      widget.onSpotCreated();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('¡Cochera publicada en la red U-Parking!'), backgroundColor: Colors.teal),
-      );
-    }
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF003B5C)),
+            onPressed: () {
+              setState(() {
+                if (currentUser != null) {
+                  currentUser!.name = nameCtrl.text.trim();
+                  currentUser!.phone = phoneCtrl.text.trim();
+                  currentUser!.defaultPlate = plateCtrl.text.trim();
+                }
+              });
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('¡Perfil actualizado correctamente!')),
+              );
+            },
+            child: const Text('Guardar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Publicar Estacionamiento')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(14),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Datos de la Cochera / Espacio', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _titleCtrl,
-                decoration: const InputDecoration(labelText: 'Título del espacio', border: OutlineInputBorder(), isDense: true),
-                validator: (v) => v!.isEmpty ? 'Requerido' : null,
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _addressCtrl,
-                decoration: const InputDecoration(labelText: 'Dirección completa en Puebla', border: OutlineInputBorder(), isDense: true),
-                validator: (v) => v!.isEmpty ? 'Requerido' : null,
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _priceCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Tarifa (\$ MXN/h)', border: OutlineInputBorder(), isDense: true),
-                      validator: (v) => v!.isEmpty ? 'Requerido' : null,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _baysCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Cajones totales', border: OutlineInputBorder(), isDense: true),
-                      validator: (v) => v!.isEmpty ? 'Requerido' : null,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              const Text('Limitaciones y Medidas', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _heightCtrl,
-                      decoration: const InputDecoration(labelText: 'Altura máx', border: OutlineInputBorder(), isDense: true),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _lengthCtrl,
-                      decoration: const InputDecoration(labelText: 'Largo máx', border: OutlineInputBorder(), isDense: true),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _rulesCtrl,
-                decoration: const InputDecoration(labelText: 'Restricciones particulares', border: OutlineInputBorder(), isDense: true),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(44),
-                  backgroundColor: const Color(0xFF003B5C),
-                ),
-                onPressed: _submit,
-                child: const Text('Publicar Disponibilidad', style: TextStyle(color: Colors.white)),
-              ),
-            ],
-          ),
+  void _openRechargeWalletDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Recargar Billetera U-Parking'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Selecciona el monto de recarga prepagada:', style: TextStyle(fontSize: 12.5)),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              children: [50.0, 100.0, 200.0].map((amount) {
+                return ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      if (currentUser != null) currentUser!.walletBalance += amount;
+                    });
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('¡+\$${amount.toStringAsFixed(0)} MXN añadidos a tu Billetera!'), backgroundColor: Colors.teal),
+                    );
+                  },
+                  child: Text('+\$${amount.toStringAsFixed(0)}'),
+                );
+              }).toList(),
+            ),
+          ],
         ),
       ),
     );
   }
-}
-
-// ============================================================================
-// 13. PERFIL DE USUARIO
-// ============================================================================
-
-class UserProfilePage extends StatelessWidget {
-  final VoidCallback onLogout;
-  const UserProfilePage({super.key, required this.onLogout});
 
   @override
   Widget build(BuildContext context) {
     final isDriver = currentUser?.role == UserRole.conductor;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Mi Perfil')),
+      appBar: AppBar(
+        title: const Text('Mi Perfil'),
+        actions: [
+          IconButton(
+            tooltip: 'Editar Perfil',
+            icon: const Icon(Icons.edit),
+            onPressed: _openEditProfileDialog,
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -2030,7 +2379,7 @@ class UserProfilePage extends StatelessWidget {
               radius: 36,
               backgroundColor: const Color(0xFF003B5C),
               child: Text(
-                currentUser?.name.substring(0, 1) ?? 'U',
+                currentUser?.name.isNotEmpty == true ? currentUser!.name.substring(0, 1).toUpperCase() : 'U',
                 style: const TextStyle(fontSize: 28, color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ),
@@ -2040,7 +2389,7 @@ class UserProfilePage extends StatelessWidget {
             const SizedBox(height: 4),
             Chip(
               label: Text(
-                isDriver ? 'Modo: Conductor' : 'Modo: Anfitrión / Dueño',
+                isDriver ? 'Rol: Conductor' : 'Rol: Anfitrión / Dueño',
                 style: const TextStyle(color: Colors.white, fontSize: 10.5),
               ),
               backgroundColor: isDriver ? Colors.teal : const Color(0xFF003B5C),
@@ -2052,13 +2401,43 @@ class UserProfilePage extends StatelessWidget {
               title: const Text('Teléfono de Contacto', style: TextStyle(fontSize: 12.5)),
               subtitle: Text(currentUser?.phone ?? 'Sin registrar', style: const TextStyle(fontSize: 11.5)),
             ),
-            ListTile(
-              dense: true,
-              leading: const Icon(Icons.account_balance_wallet_outlined),
-              title: Text(isDriver ? 'Billetera U-Parking' : 'Balance de Ganancias', style: const TextStyle(fontSize: 12.5)),
-              subtitle: Text(isDriver ? '\$120.00 MXN en saldo' : '\$580.00 MXN por liquidar', style: const TextStyle(fontSize: 11.5, color: Colors.teal)),
+            if (isDriver)
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.badge_outlined),
+                title: const Text('Placas Predeterminadas', style: TextStyle(fontSize: 12.5)),
+                subtitle: Text(currentUser?.defaultPlate ?? 'Sin registrar', style: const TextStyle(fontSize: 11.5)),
+              ),
+
+            // Tarjeta de Billetera U-Parking
+            Card(
+              color: Colors.blue.shade50,
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              child: ListTile(
+                leading: const Icon(Icons.account_balance_wallet, color: Color(0xFF003B5C), size: 30),
+                title: Text(isDriver ? 'Billetera U-Parking' : 'Balance de Ganancias', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                subtitle: Text(
+                  '\$${currentUser?.walletBalance.toStringAsFixed(2) ?? "0.00"} MXN disponibles',
+                  style: const TextStyle(fontSize: 13, color: Colors.teal, fontWeight: FontWeight.bold),
+                ),
+                trailing: isDriver
+                    ? ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF003B5C)),
+                        onPressed: _openRechargeWalletDialog,
+                        child: const Text('Recargar', style: TextStyle(color: Colors.white, fontSize: 11)),
+                      )
+                    : null,
+              ),
             ),
+
             const Divider(height: 24),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(42)),
+              icon: const Icon(Icons.edit, size: 16),
+              label: const Text('Editar Datos del Perfil'),
+              onPressed: _openEditProfileDialog,
+            ),
+            const SizedBox(height: 8),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red.shade50,
@@ -2069,7 +2448,7 @@ class UserProfilePage extends StatelessWidget {
               label: const Text('Cerrar Sesión / Cambiar de Rol'),
               onPressed: () {
                 currentUser = null;
-                onLogout();
+                widget.onLogout();
               },
             ),
           ],
