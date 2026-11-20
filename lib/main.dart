@@ -364,7 +364,7 @@ class AppState extends ChangeNotifier {
         id: 'u1',
         name: 'Alejandra Torres',
         email: 'conductor@uparking.mx',
-        phone: '222 555 0100',
+        phone: '2225550100',
         password: '1234',
         role: UserRole.conductor,
         plate: 'ABC-123-A',
@@ -374,7 +374,7 @@ class AppState extends ChangeNotifier {
         id: 'h1',
         name: 'Don Ignacio Ramos',
         email: 'ignacio@uparking.mx',
-        phone: '222 555 0141',
+        phone: '2225550141',
         password: '1234',
         role: UserRole.anfitrion,
       ),
@@ -382,7 +382,7 @@ class AppState extends ChangeNotifier {
         id: 'h2',
         name: 'Beatriz Solís',
         email: 'beatriz@uparking.mx',
-        phone: '222 555 0162',
+        phone: '2225550162',
         password: '1234',
         role: UserRole.anfitrion,
       ),
@@ -390,7 +390,7 @@ class AppState extends ChangeNotifier {
         id: 'h3',
         name: 'Carlos Mendoza',
         email: 'carlos@uparking.mx',
-        phone: '222 555 0183',
+        phone: '2225550183',
         password: '1234',
         role: UserRole.anfitrion,
       ),
@@ -409,7 +409,7 @@ class AppState extends ChangeNotifier {
         openMin: 7 * 60,
         closeMin: 22 * 60,
         hostName: 'Don Ignacio Ramos',
-        hostPhone: '222 555 0141',
+        hostPhone: '2225550141',
         hostPhotoUrl: 'https://i.pravatar.cc/150?img=12',
         hostRating: 4.8,
         hostVerified: true,
@@ -464,7 +464,7 @@ class AppState extends ChangeNotifier {
         openMin: 8 * 60,
         closeMin: 21 * 60,
         hostName: 'Beatriz Solís',
-        hostPhone: '222 555 0162',
+        hostPhone: '2225550162',
         hostPhotoUrl: 'https://i.pravatar.cc/150?img=47',
         hostRating: 4.9,
         hostVerified: true,
@@ -513,7 +513,7 @@ class AppState extends ChangeNotifier {
         openMin: 6 * 60 + 30,
         closeMin: 22 * 60,
         hostName: 'Carlos Mendoza',
-        hostPhone: '222 555 0183',
+        hostPhone: '2225550183',
         hostPhotoUrl: 'https://i.pravatar.cc/150?img=33',
         hostRating: 4.7,
         hostVerified: true,
@@ -565,10 +565,10 @@ class AppState extends ChangeNotifier {
         spotAddress: 'Calle 4 Poniente #305, Centro Histórico, 72000 Puebla, Pue.',
         hostId: 'h1',
         hostName: 'Don Ignacio Ramos',
-        hostPhone: '222 555 0141',
+        hostPhone: '2225550141',
         driverId: 'u1',
         driverName: 'Alejandra Torres',
-        driverPhone: '222 555 0100',
+        driverPhone: '2225550100',
         plate: 'ABC-123-A',
         vehicle: VehicleCategory.sedan,
         date: dateOnly(DateTime.now()),
@@ -1598,6 +1598,7 @@ Widget formField({
   int maxLines = 1,
   bool obscure = false,
   Widget? suffix,
+  int? maxLength,
   TextCapitalization capitalization = TextCapitalization.none,
 }) {
   return Padding(
@@ -1607,6 +1608,7 @@ Widget formField({
       validator: validator,
       keyboardType: keyboardType,
       maxLines: maxLines,
+      maxLength: maxLength,
       obscureText: obscure,
       textCapitalization: capitalization,
       decoration: inputDeco(label, icon: icon, hint: hint, suffix: suffix),
@@ -1625,8 +1627,11 @@ String? emailValidator(String? v) {
 }
 
 String? phoneValidator(String? v) {
-  final digits = (v ?? '').replaceAll(RegExp(r'\D'), '');
-  if (digits.length < 10) return 'Ingresa 10 dígitos';
+  final s = (v ?? '').trim();
+  if (s.isEmpty) return 'Ingresa tu teléfono';
+  if (!RegExp(r'^\d{10}$').hasMatch(s)) {
+    return 'Debe tener exactamente 10 dígitos (solo números)';
+  }
   return null;
 }
 
@@ -2123,7 +2128,8 @@ class _AuthScreenState extends State<AuthScreen>
             label: 'Teléfono / WhatsApp',
             icon: Icons.phone_outlined,
             keyboardType: TextInputType.phone,
-            hint: '222 123 4567',
+            hint: '2221234567',
+            maxLength: 10,
             validator: phoneValidator,
           ),
           formField(
@@ -4826,6 +4832,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                 label: 'Teléfono / WhatsApp',
                 icon: Icons.phone_outlined,
                 keyboardType: TextInputType.phone,
+                maxLength: 10,
                 validator: phoneValidator,
               ),
               if (_isDriver)
