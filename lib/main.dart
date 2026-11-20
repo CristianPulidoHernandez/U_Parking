@@ -2,7 +2,7 @@
 // U-PARKING · Renta colaborativa de estacionamientos y cocheras en Puebla, MX
 // -----------------------------------------------------------------------------
 // Archivo único: lib/main.dart
-// Dependencias: solo Flutter SDK (material + foundation + dart:ui).
+// Dependencias: Flutter SDK + image_picker (subir fotos desde el dispositivo).
 //
 // Estructura:
 //   1. Constantes y utilidades
@@ -25,10 +25,13 @@
 //    flutter_localizations (no se agregan dependencias).
 // =============================================================================
 
+import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 void main() => runApp(const UParkingApp());
 
@@ -1368,9 +1371,27 @@ class NetImage extends StatelessWidget {
   final String url;
   final BoxFit fit;
 
+  /// Caché de fotos locales ya decodificadas (evita decodificar en cada build).
+  static final Map<String, Uint8List> _memoryCache = <String, Uint8List>{};
+
   @override
   Widget build(BuildContext context) {
     if (url.trim().isEmpty) return const PhotoPlaceholder();
+    // Foto subida desde el dispositivo (data URI en base64).
+    if (url.startsWith('data:image')) {
+      final bytes = _memoryCache.putIfAbsent(
+        url,
+        () => base64Decode(url.substring(url.indexOf(',') + 1)),
+      );
+      return Image.memory(
+        bytes,
+        fit: fit,
+        width: double.infinity,
+        height: double.infinity,
+        gaplessPlayback: true,
+        errorBuilder: (context, error, stack) => const PhotoPlaceholder(),
+      );
+    }
     return Image.network(
       url,
       fit: fit,
@@ -4033,6 +4054,8 @@ class _SpotFormPageState extends State<SpotFormPage> {
   late List<TimeRange> _peaks;
   String? _photoError;
   String? _vehicleError;
+  final ImagePicker _picker = ImagePicker();
+  static const int _maxPhotos = 10;
 
   bool get _isEdit => widget.spot != null;
 
@@ -4108,6 +4131,42 @@ class _SpotFormPageState extends State<SpotFormPage> {
       _peaks.add(TimeRange(start, end));
       _peaks.sort((a, b) => a.start.compareTo(b.start));
     });
+  }
+
+  /// Abre la galería del dispositivo (selección múltiple) y agrega las fotos.
+  Future<void> _pickFromDevice() async {
+    final remaining = _maxPhotos - _photos.length;
+    if (remaining <= 0) {
+      showSnack(context, 'Máximo $_maxPhotos fotos por cochera.', error: true);
+      return;
+    }
+    try {
+      final files = await _picker.pickMultiImage(
+        maxWidth: 1280,
+        imageQuality: 75,
+      );
+      if (files.isEmpty) return;
+      final encoded = <String>[];
+      for (final f in files.take(remaining)) {
+        final bytes = await f.readAsBytes();
+        encoded.add('data:image/jpeg;base64,${base64Encode(bytes)}');
+      }
+      if (!mounted) return;
+      setState(() {
+        _photos.addAll(encoded);
+        _photoError = null;
+      });
+      showSnack(
+        context,
+        files.length > remaining
+            ? 'Se agregaron $remaining fotos (máximo $_maxPhotos).'
+            : '${encoded.length} foto(s) agregada(s).',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      showSnack(context, 'No se pudo abrir la galería. Revisa los permisos.',
+          error: true);
+    }
   }
 
   void _addPhoto() {
@@ -4333,11 +4392,25 @@ class _SpotFormPageState extends State<SpotFormPage> {
 
             // Fotografías
             SectionCard(
-              title: 'Fotografías (URL)',
+              title: 'Fotografías',
               icon: Icons.photo_library_outlined,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _pickFromDevice,
+                      icon: const Icon(Icons.upload),
+                      label: const Text('Subir fotos desde el dispositivo'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'O agrega una foto con su URL:',
+                    style: TextStyle(fontSize: 12.5, color: Colors.black54),
+                  ),
+                  const SizedBox(height: 8),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
